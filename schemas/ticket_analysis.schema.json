@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "TicketAnalysisResult",
+  "description": "工单文本分析结果的结构化 JSON Schema",
+  "type": "object",
+  "required": [
+    "category",
+    "priority",
+    "summary",
+    "tags",
+    "confidence",
+    "need_human_review",
+    "uncertain_fields"
+  ],
+  "properties": {
+    "category": {
+      "type": "string",
+      "description": "工单类别"
+    },
+    "priority": {
+      "type": "string",
+      "description": "优先级"
+    },
+    "summary": {
+      "type": "string",
+      "description": "工单简短摘要"
+    },
+    "tags": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "标签列表"
+    },
+    "order_id": {
+      "type": ["string", "null"],
+      "description": "关联订单号，无法提取时为 null"
+    },
+    "confidence": {
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0,
+      "description": "模型置信度"
+    },
+    "need_human_review": {
+      "type": "boolean",
+      "description": "是否需要人工审核"
+    },
+    "uncertain_fields": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "信息不足的字段列表，使用\"不确定\"值"
+    }
+  }
+}
