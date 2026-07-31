@@ -16,10 +16,15 @@ from app.domain.exceptions import (
     LLMConfigurationError,
     LLMAuthenticationError,
     LLMTimeoutError,
+    LLMConnectionError,
+    LLMRateLimitError,
+    LLMServerError,
     LLMRequestError,
     LLMEmptyResponseError,
     OutputParseError,
     OutputValidationError,
+    OutputRepairError,
+    OutputRepairExhaustedError,
 )
 
 router = APIRouter(tags=["tickets"])
@@ -37,7 +42,7 @@ def _get_service(request: Request):
         422: {"model": ErrorResponse, "description": "请求参数或输出校验失败"},
         500: {"model": ErrorResponse, "description": "服务器内部错误"},
         502: {"model": ErrorResponse, "description": "LLM 服务不可用"},
-        503: {"model": ErrorResponse, "description": "LLM 配置错误"},
+        503: {"model": ErrorResponse, "description": "LLM 配置或超时错误"},
         504: {"model": ErrorResponse, "description": "LLM 请求超时"},
     },
     summary="分析工单文本",
@@ -50,6 +55,14 @@ async def analyze_ticket_endpoint(
     try:
         return await service.analyze(
             request.ticket_text, request.prompt_version
+        )
+    # -- 输出错误（422）--
+    except OutputRepairExhaustedError as exc:
+        return JSONResponse(
+            status_code=422,
+            content=ErrorResponse(
+                detail=str(exc), error_type="output_repair_exhausted"
+            ).model_dump(),
         )
     except OutputParseError as exc:
         return JSONResponse(
@@ -65,6 +78,14 @@ async def analyze_ticket_endpoint(
                 detail=str(exc), error_type="output_validation_error"
             ).model_dump(),
         )
+    except OutputRepairError as exc:
+        return JSONResponse(
+            status_code=422,
+            content=ErrorResponse(
+                detail=str(exc), error_type="output_repair_error"
+            ).model_dump(),
+        )
+    # -- 提示词错误（500）--
     except PromptNotFoundError as exc:
         return JSONResponse(
             status_code=500,
@@ -79,6 +100,7 @@ async def analyze_ticket_endpoint(
                 detail=str(exc), error_type="prompt_render_error"
             ).model_dump(),
         )
+    # -- LLM 配置错误（503）--
     except LLMConfigurationError as exc:
         return JSONResponse(
             status_code=503,
@@ -86,6 +108,7 @@ async def analyze_ticket_endpoint(
                 detail=str(exc), error_type="llm_configuration_error"
             ).model_dump(),
         )
+    # -- 鉴权错误（502，不重试）--
     except LLMAuthenticationError as exc:
         return JSONResponse(
             status_code=502,
@@ -94,11 +117,37 @@ async def analyze_ticket_endpoint(
                 error_type="llm_authentication_error",
             ).model_dump(),
         )
+    # -- 超时/限流/服务端错误（503/504，可能已重试）--
     except LLMTimeoutError as exc:
         return JSONResponse(
             status_code=504,
             content=ErrorResponse(
-                detail=str(exc), error_type="llm_timeout_error"
+                detail=f"LLM 请求超时（已重试）：{exc}",
+                error_type="llm_timeout_error",
+            ).model_dump(),
+        )
+    except LLMConnectionError as exc:
+        return JSONResponse(
+            status_code=503,
+            content=ErrorResponse(
+                detail=f"LLM 连接失败（已重试）：{exc}",
+                error_type="llm_connection_error",
+            ).model_dump(),
+        )
+    except LLMRateLimitError as exc:
+        return JSONResponse(
+            status_code=503,
+            content=ErrorResponse(
+                detail=f"LLM 速率限制（已重试）：{exc}",
+                error_type="llm_rate_limit_error",
+            ).model_dump(),
+        )
+    except LLMServerError as exc:
+        return JSONResponse(
+            status_code=503,
+            content=ErrorResponse(
+                detail=f"LLM 服务端错误（已重试）：{exc}",
+                error_type="llm_server_error",
             ).model_dump(),
         )
     except (LLMRequestError, LLMEmptyResponseError) as exc:
@@ -108,6 +157,7 @@ async def analyze_ticket_endpoint(
                 detail=str(exc), error_type="llm_request_error"
             ).model_dump(),
         )
+    # -- 通用错误 --
     except AnalysisError as exc:
         return JSONResponse(
             status_code=500,

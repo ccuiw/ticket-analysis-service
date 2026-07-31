@@ -43,17 +43,32 @@ class LLMConfigurationError(LLMError):
 
 
 class LLMAuthenticationError(LLMError):
-    """LLM 鉴权失败（API Key 无效或过期）。"""
+    """LLM 鉴权失败（API Key 无效或过期）。不可重试。"""
     pass
 
 
 class LLMTimeoutError(LLMError):
-    """LLM 请求超时。"""
+    """LLM 请求超时。可重试。"""
+    pass
+
+
+class LLMConnectionError(LLMError):
+    """LLM 连接失败（DNS、TCP 或 TLS 错误）。可重试。"""
+    pass
+
+
+class LLMRateLimitError(LLMError):
+    """LLM 速率限制（HTTP 429）。可重试。"""
+    pass
+
+
+class LLMServerError(LLMError):
+    """LLM 服务端错误（HTTP 5xx，可重试）。"""
     pass
 
 
 class LLMRequestError(LLMError):
-    """LLM 请求失败（网络错误、服务端错误等）。"""
+    """LLM 请求失败（其他不可重试的错误）。"""
     pass
 
 
@@ -65,12 +80,31 @@ class LLMEmptyResponseError(LLMError):
 # -- 输出处理异常 --
 
 class OutputParseError(DomainError):
-    """模型输出 JSON 解析失败。"""
+    """模型输出 JSON 解析失败。可触发修复。"""
     pass
 
 
 class OutputValidationError(DomainError):
-    """模型输出结构校验失败。"""
+    """模型输出结构校验失败。可触发修复。"""
+    pass
+
+
+# -- 修复异常 --
+
+class OutputRepairError(DomainError):
+    """输出修复相关的基类异常。"""
+    pass
+
+
+class OutputRepairExhaustedError(OutputRepairError):
+    """输出修复已达到最大尝试次数。"""
+    pass
+
+
+# -- 重试配置异常 --
+
+class RetryConfigurationError(DomainError):
+    """重试配置无效。"""
     pass
 
 
@@ -82,5 +116,5 @@ class ValidationError(DomainError):
 
 
 class RepairFailedError(DomainError):
-    """JSON 修复失败（后续阶段实现）。"""
+    """JSON 修复失败（已废弃，请使用 OutputRepairExhaustedError）。"""
     pass

@@ -152,8 +152,8 @@ LLM_TIMEOUT_SECONDS=30
 - [x] 真实提示词模板：Zero-shot (V1) + Few-shot (V2)
 - [x] 结构化分析管道：Prompt → LLM → Parse → Validate
 - [x] 模拟分析接口：关键词感知 Mock Provider
-- [ ] JSON 格式自动修复（markdown fence、尾随逗号等）
-- [ ] 自动重试
+- [x] 网络重试：可重试错误自动重试（超时、连接、429、5xx）
+- [x] 输出修复：JSON 解析/校验失败时单次 LLM 修复
 - [ ] Zero-shot / Few-shot 提示词版本比较
 - [ ] 评估报告生成
 - [ ] Docker Compose 部署
