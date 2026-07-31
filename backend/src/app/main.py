@@ -1,8 +1,15 @@
+"""FastAPI 应用工厂。"""
+
 import os
-from contextlib import asynccontextmanager
+import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.v1.tickets import router as tickets_router
+from app.application.ticket_analysis_service import TicketAnalysisService
+from app.llm.provider_factory import create_provider
+from app.domain.exceptions import LLMConfigurationError
+
+logger = logging.getLogger(__name__)
 
 
 def create_app() -> FastAPI:
@@ -11,7 +18,7 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title="Ticket Analysis Service",
         description="工单文本分析服务",
-        version="0.1.0",
+        version="0.2.0",
     )
 
     app.add_middleware(
@@ -21,6 +28,16 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    # 创建 Provider 和 Analysis Service
+    try:
+        provider = create_provider()
+        logger.info("LLM Provider: %s", provider.model_name)
+    except LLMConfigurationError as exc:
+        logger.error("LLM 配置错误：%s", exc)
+        raise
+
+    app.state.analysis_service = TicketAnalysisService(provider)
 
     @app.get("/health")
     async def health_check():
