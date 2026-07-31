@@ -34,6 +34,6 @@ Thumbs.db
 .docker/
 
 # Reports
-reports/*.json
-reports/*.csv
+reports/evaluation/runs/
+reports/evaluation/latest_cases.csv
 !reports/.gitkeep
