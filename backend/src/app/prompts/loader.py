@@ -6,6 +6,7 @@
 """
 
 import os
+import re
 from pathlib import Path
 from app.domain.exceptions import PromptNotFoundError
 
@@ -21,8 +22,9 @@ def _resolve_prompts_dir() -> Path:
     if env_dir:
         return Path(env_dir)
 
-    # 从 src/app/prompts/loader.py 向上到项目根
-    return Path(__file__).resolve().parents[3] / "prompts"
+    # 从 backend/src/app/prompts/loader.py 向上到项目根
+    # parents: [0]=prompts, [1]=app, [2]=src, [3]=backend, [4]=project root
+    return Path(__file__).resolve().parents[4] / "prompts"
 
 
 def load_prompt(name: str) -> str:
@@ -44,3 +46,23 @@ def load_prompt(name: str) -> str:
         raise PromptNotFoundError(f"提示词文件不存在：{file_path}")
 
     return file_path.read_text(encoding="utf-8")
+
+
+def list_versions() -> list[str]:
+    """列出所有可用的提示词版本。
+
+    扫描 prompts/ 目录，匹配 ticket_analysis_v*.txt 模式的文件。
+
+    Returns:
+        版本字符串列表，如 ["v1", "v2"]。
+    """
+    prompts_dir = _resolve_prompts_dir()
+    versions = []
+    pattern = re.compile(r"ticket_analysis_(v\d+)\.txt$")
+
+    for file_path in prompts_dir.iterdir():
+        match = pattern.match(file_path.name)
+        if match:
+            versions.append(match.group(1))
+
+    return sorted(versions)
