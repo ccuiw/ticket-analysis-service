@@ -1,0 +1,105 @@
+.loading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: #666;
+  padding: 24px 0;
+}
+
+.spinner {
+  width: 20px;
+  height: 20px;
+  border: 3px solid #e0e0e0;
+  border-top-color: #4a90d9;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.error {
+  color: #c0392b;
+  padding: 16px;
+  background: #fdf2f2;
+  border: 1px solid #f5c6cb;
+  border-radius: 6px;
+}
+
+.error strong {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.error p {
+  font-size: 14px;
+}
+
+.success {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.resultTitle {
+  font-size: 18px;
+  font-weight: 600;
+  color: #1a1a1a;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #eee;
+}
+
+.fieldList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.fieldRow {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.fieldLabel {
+  flex-shrink: 0;
+  width: 120px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #666;
+}
+
+.fieldValue {
+  font-size: 14px;
+  color: #333;
+  flex: 1;
+}
+
+.rawJson {
+  margin-top: 16px;
+  border-top: 1px solid #eee;
+  padding-top: 16px;
+}
+
+.rawSummary {
+  font-size: 14px;
+  color: #4a90d9;
+  cursor: pointer;
+  user-select: none;
+}
+
+.rawPre {
+  margin-top: 8px;
+  padding: 12px;
+  background: #f8f8f8;
+  border: 1px solid #e8e8e8;
+  border-radius: 4px;
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
