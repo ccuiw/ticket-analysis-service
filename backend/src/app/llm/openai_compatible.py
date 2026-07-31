@@ -13,6 +13,9 @@ from app.domain.exceptions import (
     LLMConfigurationError,
     LLMAuthenticationError,
     LLMTimeoutError,
+    LLMConnectionError,
+    LLMRateLimitError,
+    LLMServerError,
     LLMRequestError,
     LLMEmptyResponseError,
 )
@@ -66,26 +69,33 @@ class OpenAICompatibleLLMProvider(BaseLLMProvider):
 
         async with self._get_client() as client:
             try:
-                response = await client.post(
-                    url,
-                    json=payload,
-                    headers=headers,
-                )
-            except httpx.TimeoutException:
+                response = await client.post(url, json=payload, headers=headers)
+            except httpx.ConnectError as exc:
+                raise LLMConnectionError(f"LLM 连接失败：{exc}") from exc
+            except httpx.TimeoutException as exc:
                 raise LLMTimeoutError(
-                    f"LLM 请求超时（{self._timeout} 秒），模型：{self._model}"
-                )
+                    f"LLM 请求超时（{self._timeout} 秒）"
+                ) from exc
             except httpx.RequestError as exc:
-                raise LLMRequestError(
-                    f"LLM 请求失败：{exc}"
-                )
+                raise LLMRequestError(f"LLM 请求失败：{exc}") from exc
 
-        if response.status_code == 401 or response.status_code == 403:
+        status = response.status_code
+
+        if status == 401 or status == 403:
             raise LLMAuthenticationError("LLM 鉴权失败，请检查 LLM_API_KEY")
-        if response.status_code != 200:
+        if status == 429:
+            retry_after = response.headers.get("Retry-After", "未知")
+            raise LLMRateLimitError(
+                f"LLM 速率限制（HTTP 429），Retry-After: {retry_after}"
+            )
+        _RETRYABLE_5XX = {500, 502, 503, 504}
+        if status in _RETRYABLE_5XX:
+            raise LLMServerError(
+                f"LLM 服务端错误（HTTP {status}）：{response.text[:500]}"
+            )
+        if status != 200:
             raise LLMRequestError(
-                f"LLM 服务返回错误（HTTP {response.status_code}）："
-                f"{response.text[:500]}"
+                f"LLM 服务返回错误（HTTP {status}）：{response.text[:500]}"
             )
 
         data = response.json()
