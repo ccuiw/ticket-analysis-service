@@ -20,16 +20,20 @@
 │        Application Layer                      │
 │  TicketAnalysisService                       │
 │  - 编排 Prompt → LLM → Parse → Validate       │
+│  - 集成 RetryPolicy（网络重试）                │
+│  - 集成 OutputRepairService（输出修复）        │
 │  - 通过构造函数注入 Provider                   │
 └────┬──────────┬──────────┬───────────────────┘
      │          │          │
 ┌────▼──┐ ┌────▼──┐ ┌─────▼──────────────┐
 │Prompt │ │  LLM  │ │ Parsing / Validation│
-│Layer  │ │ Layer │ │ Layer               │
+│Layer  │ │ Layer │ │   / Repair Layer    │
 │       │ │       │ │                     │
 │loader │ │Base   │ │parse_raw_output()   │
 │builder│ │Mock   │ │validate_structure() │
-│       │ │OpenAI │ │validate_business()  │
+│repair │ │OpenAI │ │validate_business()  │
+│prompt │ │+Retry │ │OutputRepairService  │
+│       │ │       │ │RetryPolicy          │
 └───────┘ └───────┘ └─────────────────────┘
 ```
 
@@ -70,12 +74,18 @@ DomainError
 ├── LLMError
 │   ├── LLMConfigurationError
 │   ├── LLMAuthenticationError
-│   ├── LLMTimeoutError
-│   ├── LLMRequestError
+│   ├── LLMTimeoutError (可重试)
+│   ├── LLMConnectionError (可重试)
+│   ├── LLMRateLimitError (可重试)
+│   ├── LLMServerError (可重试)
+│   ├── LLMRequestError (不可重试)
 │   └── LLMEmptyResponseError
-├── OutputParseError
-├── OutputValidationError
-└── RepairFailedError (reserved)
+├── OutputParseError (可触发修复)
+├── OutputValidationError (可触发修复)
+├── OutputRepairError
+│   └── OutputRepairExhaustedError
+├── RetryConfigurationError
+└── RepairFailedError (已废弃)
 ```
 
 ### 提示词版本
@@ -85,10 +95,17 @@ DomainError
 - 两个版本返回相同的数据结构
 - 提示词文件存放在 `prompts/` 目录，运行时可配置路径
 
+### 重试与修复
+
+- `RetryPolicy`：控制网络级重试。可重试：`LLMTimeoutError`、`LLMConnectionError`、`LLMRateLimitError`、`LLMServerError`
+- `OutputRepairService`：JSON 解析/校验失败时，使用 `json_repair.txt` 提示词请求模型修复输出
+- 修复最多执行一次，网络重试最多 `LLM_MAX_ATTEMPTS` 次
+- 最坏情况调用次数：初始 1 + 网络重试 1 + 修复 1 + 修复重试 1 = **4 次**
+- 可通过 `LLM_OUTPUT_REPAIR_ENABLED=false` 关闭修复
+
 ### 当前范围外
 
-- JSON 自动修复（markdown fence、尾随逗号等）
-- 自动重试
 - 备用模型
 - 多供应商
 - Docker Compose
+- 提示词版本批量评估
