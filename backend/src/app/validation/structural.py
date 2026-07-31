@@ -7,7 +7,7 @@
 
 from pydantic import ValidationError as PydanticValidationError
 from app.models.responses import AnalysisResult
-from app.domain.exceptions import ValidationError
+from app.domain.exceptions import OutputValidationError
 
 
 def validate_structure(data: dict) -> AnalysisResult:
@@ -20,9 +20,11 @@ def validate_structure(data: dict) -> AnalysisResult:
         校验通过的 AnalysisResult 实例。
 
     Raises:
-        ValidationError: 数据不符合 AnalysisResult 结构。
+        OutputValidationError: 数据不符合 AnalysisResult 结构。
     """
     try:
         return AnalysisResult.model_validate(data)
     except PydanticValidationError as exc:
-        raise ValidationError(f"分析结果结构校验失败：{exc}") from exc
+        raise OutputValidationError(
+            f"分析结果结构校验失败：{exc}"
+        ) from exc
