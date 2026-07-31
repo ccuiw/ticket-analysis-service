@@ -30,6 +30,8 @@ uvicorn app.main:app --host 127.0.0.1 --port 8000
 
 访问 <http://127.0.0.1:8000/docs> 查看自动生成的 API 文档。
 
+**默认使用 Mock Provider**，无需配置任何 API Key 即可运行。
+
 ### 前端
 
 ```bash
@@ -52,6 +54,28 @@ cd frontend
 npx tsc --noEmit
 npx eslint src/
 ```
+
+## LLM Provider 配置
+
+### Mock 模式（默认）
+
+无需配置，默认使用基于关键词匹配的模拟分析器。适合开发和测试。
+
+### OpenAI-compatible 模式
+
+在 `.env` 文件中配置以下变量：
+
+```bash
+LLM_PROVIDER=openai_compatible
+LLM_API_KEY=sk-your-api-key
+LLM_BASE_URL=https://api.openai.com/v1
+LLM_MODEL=gpt-4o
+LLM_TIMEOUT_SECONDS=30
+```
+
+支持任意兼容 OpenAI Chat Completions API 的服务。
+
+**警告：不要将包含真实 API Key 的 `.env` 文件提交到 Git。**
 
 ## API 概览
 
@@ -91,6 +115,15 @@ npx eslint src/
 }
 ```
 
+### 提示词版本
+
+| 版本 | 策略 | 说明 |
+| --- | --- | --- |
+| `v1` | Zero-shot | 纯指令 + 字段说明 + 输出格式要求 |
+| `v2` | Few-shot | 在 V1 基础上增加 3 个示例，覆盖明确分类、缺失订单号、信息不足场景 |
+
+两个版本返回相同的数据结构。
+
 ## 目录结构
 
 ```text
@@ -108,15 +141,19 @@ npx eslint src/
 ├── schemas/             # JSON Schema
 ├── data/                # 测试数据
 ├── docs/                # 文档
+│   └── architecture.md  # 架构文档
 └── reports/             # 评估报告
 ```
 
 ## 当前状态
 
 - [x] 项目初始化：FastAPI + React 骨架
-- [x] 模拟分析接口：根据关键词返回固定结果
-- [ ] 接入真实大模型 API
-- [ ] JSON 格式自动修复
+- [x] LLM Provider 抽象：Mock + OpenAI-compatible
+- [x] 真实提示词模板：Zero-shot (V1) + Few-shot (V2)
+- [x] 结构化分析管道：Prompt → LLM → Parse → Validate
+- [x] 模拟分析接口：关键词感知 Mock Provider
+- [ ] JSON 格式自动修复（markdown fence、尾随逗号等）
+- [ ] 自动重试
 - [ ] Zero-shot / Few-shot 提示词版本比较
 - [ ] 评估报告生成
 - [ ] Docker Compose 部署
