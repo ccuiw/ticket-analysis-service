@@ -4,7 +4,7 @@ import pytest
 from app.models.responses import AnalysisResult
 from app.validation.structural import validate_structure
 from app.validation.business import validate_business_rules
-from app.domain.exceptions import ValidationError
+from app.domain.exceptions import OutputValidationError
 
 
 class TestStructuralValidation:
@@ -29,7 +29,7 @@ class TestStructuralValidation:
             "priority": "低",
             # 缺少 summary、confidence 等必填字段
         }
-        with pytest.raises(ValidationError):
+        with pytest.raises(OutputValidationError):
             validate_structure(data)
 
     def test_invalid_confidence_type_raises(self):
@@ -43,7 +43,7 @@ class TestStructuralValidation:
             "need_human_review": False,
             "uncertain_fields": [],
         }
-        with pytest.raises(ValidationError):
+        with pytest.raises(OutputValidationError):
             validate_structure(data)
 
     def test_confidence_out_of_range_raises(self):
@@ -57,7 +57,7 @@ class TestStructuralValidation:
             "need_human_review": False,
             "uncertain_fields": [],
         }
-        with pytest.raises(ValidationError):
+        with pytest.raises(OutputValidationError):
             validate_structure(data)
 
 
