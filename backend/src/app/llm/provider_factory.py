@@ -5,10 +5,13 @@ LLM Provider 工厂函数。
 """
 
 import os
+import logging
 from app.llm.base import BaseLLMProvider
 from app.llm.mock_provider import MockLLMProvider
 from app.llm.openai_compatible import OpenAICompatibleLLMProvider
 from app.domain.exceptions import LLMConfigurationError
+
+logger = logging.getLogger(__name__)
 
 
 def create_provider() -> BaseLLMProvider:
@@ -20,6 +23,7 @@ def create_provider() -> BaseLLMProvider:
         LLM_BASE_URL: API 基础 URL（openai_compatible 时必需）
         LLM_MODEL: 模型名称（openai_compatible 时必需）
         LLM_TIMEOUT_SECONDS: 超时秒数（默认 30）
+        LLM_THINKING_MODE: 思考模式（默认 disabled）
 
     Returns:
         BaseLLMProvider 实例。
@@ -37,6 +41,7 @@ def create_provider() -> BaseLLMProvider:
         base_url = os.getenv("LLM_BASE_URL", "").strip()
         model = os.getenv("LLM_MODEL", "").strip()
         timeout_str = os.getenv("LLM_TIMEOUT_SECONDS", "30").strip()
+        thinking_mode = os.getenv("LLM_THINKING_MODE", "disabled").strip().lower()
 
         if not api_key:
             raise LLMConfigurationError(
@@ -49,6 +54,10 @@ def create_provider() -> BaseLLMProvider:
         if not model:
             raise LLMConfigurationError(
                 "已选择 openai_compatible Provider，但未配置 LLM_MODEL"
+            )
+        if thinking_mode not in ("enabled", "disabled"):
+            raise LLMConfigurationError(
+                f"LLM_THINKING_MODE 必须是 enabled 或 disabled，当前值：{thinking_mode}"
             )
 
         try:
@@ -63,6 +72,7 @@ def create_provider() -> BaseLLMProvider:
             base_url=base_url,
             api_key=api_key,
             timeout_seconds=timeout,
+            thinking_mode=thinking_mode,
         )
 
     raise LLMConfigurationError(

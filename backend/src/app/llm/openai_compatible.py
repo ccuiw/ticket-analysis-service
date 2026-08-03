@@ -6,6 +6,7 @@ OpenAI-compatible Chat Completions Provider。
 """
 
 import os
+import logging
 import httpx
 from app.llm.base import BaseLLMProvider
 from app.llm.messages import LLMMessage, LLMResponse
@@ -20,12 +21,16 @@ from app.domain.exceptions import (
     LLMEmptyResponseError,
 )
 
+logger = logging.getLogger(__name__)
+
 
 class OpenAICompatibleLLMProvider(BaseLLMProvider):
     """OpenAI-compatible Chat Completions 供应商。
 
     通过 httpx.AsyncClient 发送请求，将网络异常
     和 API 错误统一转换为领域异常。
+
+    所有请求统一使用配置的 thinking_mode（默认 disabled）。
     """
 
     def __init__(
@@ -34,6 +39,7 @@ class OpenAICompatibleLLMProvider(BaseLLMProvider):
         base_url: str,
         api_key: str,
         timeout_seconds: float = 30.0,
+        thinking_mode: str = "disabled",
     ) -> None:
         if not api_key:
             raise LLMConfigurationError("未配置 LLM_API_KEY")
@@ -41,12 +47,23 @@ class OpenAICompatibleLLMProvider(BaseLLMProvider):
             raise LLMConfigurationError("未配置 LLM_BASE_URL")
         if not model:
             raise LLMConfigurationError("未配置 LLM_MODEL")
+        if thinking_mode not in ("enabled", "disabled"):
+            raise LLMConfigurationError(
+                f"LLM_THINKING_MODE 必须是 enabled 或 disabled，当前值：{thinking_mode}"
+            )
 
         self._model = model
         self._base_url = base_url.rstrip("/")
         self._api_key = api_key
         self._timeout = timeout_seconds
+        self._thinking_mode = thinking_mode
         self._client: httpx.AsyncClient | None = None
+
+        logger.info(
+            "LLM provider configured: provider=openai_compatible model=%s thinking=%s",
+            self._model,
+            self._thinking_mode,
+        )
 
     @property
     def model_name(self) -> str:
@@ -59,6 +76,7 @@ class OpenAICompatibleLLMProvider(BaseLLMProvider):
                 {"role": m.role, "content": m.content} for m in messages
             ],
             "temperature": 0.0,
+            "thinking": {"type": self._thinking_mode},
         }
 
         url = f"{self._base_url}/chat/completions"
