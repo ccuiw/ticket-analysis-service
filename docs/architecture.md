@@ -107,5 +107,61 @@ DomainError
 
 - 备用模型
 - 多供应商
-- Docker Compose
-- 提示词版本批量评估
+- 生产环境监控
+
+## 评估架构
+
+```
+backend/src/app/evaluation/
+├── models.py          # TestCase, EvaluationCaseResult, EvaluationMetrics
+├── dataset.py         # Load/validate test_cases.jsonl
+├── metrics.py         # 11 evaluation metrics
+├── runner.py          # Run evaluation for one prompt version
+├── report_writer.py   # Generate JSON, CSV, Markdown reports
+├── run.py             # CLI entry: python -m app.evaluation.run
+└── cli.py             # Argument parsing
+```
+
+### 评估指标
+
+- JSON Parse Rate — 首次模型输出可被严格 JSON 解析的比例
+- Structured Success Rate — 最终通过结构校验的比例
+- Category Accuracy — 分类准确率
+- Priority Accuracy — 优先级准确率
+- Order ID Accuracy — 订单号准确率（含虚构检测）
+- Human Review Accuracy — 人工审核准确率
+- Tag Recall — 标签召回率
+- Fabrication Rate — 编造率
+- Repair Trigger Rate — 修复触发率
+- Average Provider Calls — 平均调用次数
+- End-to-End Success Rate — 端到端成功率
+
+## Docker 架构
+
+```
+docker-compose.yml
+├── backend (python:3.12-slim)
+│   ├── uvicorn on 0.0.0.0:8000
+│   ├── /app/src/          (backend source)
+│   ├── /app/prompts/      (prompt templates, COPY)
+│   ├── /app/schemas/      (JSON Schema, COPY)
+│   ├── /app/data/         (test cases, COPY)
+│   └── /app/reports/      (evaluation output, volume mount)
+└── frontend (node:22-alpine → nginx:alpine)
+    ├── multi-stage build (npm build → nginx)
+    └── port 80 mapped to 5173
+```
+
+## 思考模式配置
+
+所有 LLM 请求统一使用 `LLM_THINKING_MODE` 配置：
+
+```python
+# openai_compatible.py — 每次 /chat/completions 请求均包含
+"thinking": {"type": "disabled"}  # 或 "enabled"
+```
+
+- 默认值：`disabled`（适合分类和结构化输出任务）
+- 配置校验：仅接受 `enabled` 或 `disabled`
+- 所有调用路径一致：分析、重试、修复、评估
+- Provider 构造时确定，整个生命周期不变

@@ -1,19 +1,18 @@
 {
   "metadata": {
-    "run_id": "8d4adf4a479f",
-    "timestamp": "2026-07-31T09:02:35.065222+00:00",
-    "provider": "mock",
-    "model": "mock",
+    "run_id": "d1997bc52280",
+    "timestamp": "2026-08-03T08:41:44.315884+00:00",
+    "provider": "openai_compatible",
+    "model": "deepseek-v4-flash",
     "prompt_versions": [
       "v1",
       "v2"
     ],
-    "dataset_path": "C:\\Users\\ccuiw\\Desktop\\w4project\\ticket-analysis-service\\data\\test_cases.jsonl",
-    "dataset_hash": "85eced461bc8b6eb",
+    "dataset_path": "/app/data/test_cases.jsonl",
+    "dataset_hash": "320fb0c6ab776a79",
     "repair_enabled": true,
     "max_attempts": 2,
-    "git_commit": "",
-    "is_mock": true
+    "is_mock": false
   },
   "reports": [
     {
@@ -21,15 +20,18 @@
       "total_cases": 20,
       "raw_parse_rate": 1.0,
       "structured_success_rate": 1.0,
-      "category_accuracy": 0.45,
-      "priority_accuracy": 0.29411764705882354,
-      "order_id_accuracy": 0.7647058823529411,
-      "human_review_accuracy": 0.65,
-      "tag_recall": 0.2926829268292683,
+      "category_accuracy": 0.7,
+      "priority_accuracy": 0.8823529411764706,
+      "order_id_accuracy": 1.0,
+      "human_review_accuracy": 0.6,
+      "tag_recall": 0.8292682926829268,
       "fabrication_rate": 0.0,
       "repair_trigger_rate": 0.0,
       "average_provider_calls": 1.0,
-      "end_to_end_success_rate": 0.15,
+      "average_duration_seconds": 2.210518395450015,
+      "average_tokens_per_case": 0.0,
+      "total_tokens_used": 0,
+      "end_to_end_success_rate": 0.4,
       "errors_by_type": {}
     },
     {
@@ -37,15 +39,18 @@
       "total_cases": 20,
       "raw_parse_rate": 1.0,
       "structured_success_rate": 1.0,
-      "category_accuracy": 0.45,
-      "priority_accuracy": 0.29411764705882354,
-      "order_id_accuracy": 0.7647058823529411,
-      "human_review_accuracy": 0.65,
-      "tag_recall": 0.2926829268292683,
+      "category_accuracy": 0.7,
+      "priority_accuracy": 0.8823529411764706,
+      "order_id_accuracy": 1.0,
+      "human_review_accuracy": 0.75,
+      "tag_recall": 0.8536585365853658,
       "fabrication_rate": 0.0,
       "repair_trigger_rate": 0.0,
       "average_provider_calls": 1.0,
-      "end_to_end_success_rate": 0.15,
+      "average_duration_seconds": 2.527278816250032,
+      "average_tokens_per_case": 0.0,
+      "total_tokens_used": 0,
+      "end_to_end_success_rate": 0.55,
       "errors_by_type": {}
     }
   ]

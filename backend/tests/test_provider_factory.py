@@ -64,3 +64,21 @@ class TestProviderFactory:
         monkeypatch.setenv("LLM_TIMEOUT_SECONDS", "not_a_number")
         with pytest.raises(LLMConfigurationError, match="LLM_TIMEOUT_SECONDS"):
             create_provider()
+
+    def test_invalid_thinking_mode_rejected(self, monkeypatch):
+        monkeypatch.setenv("LLM_PROVIDER", "openai_compatible")
+        monkeypatch.setenv("LLM_API_KEY", "sk-test")
+        monkeypatch.setenv("LLM_BASE_URL", "https://api.example.com/v1")
+        monkeypatch.setenv("LLM_MODEL", "gpt-4o")
+        monkeypatch.setenv("LLM_THINKING_MODE", "invalid_mode")
+        with pytest.raises(LLMConfigurationError, match="LLM_THINKING_MODE"):
+            create_provider()
+
+    def test_thinking_mode_disabled_accepted(self, monkeypatch):
+        monkeypatch.setenv("LLM_PROVIDER", "openai_compatible")
+        monkeypatch.setenv("LLM_API_KEY", "sk-test")
+        monkeypatch.setenv("LLM_BASE_URL", "https://api.example.com/v1")
+        monkeypatch.setenv("LLM_MODEL", "gpt-4o")
+        monkeypatch.setenv("LLM_THINKING_MODE", "disabled")
+        provider = create_provider()
+        assert provider.model_name == "gpt-4o"
