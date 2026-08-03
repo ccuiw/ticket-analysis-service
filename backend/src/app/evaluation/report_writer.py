@@ -4,10 +4,10 @@ import json
 import csv
 import io
 from pathlib import Path
-from datetime import datetime, timezone
 from app.evaluation.models import (
     PromptVersionReport,
     EvaluationRunMetadata,
+    EvaluationMetrics,
 )
 
 
@@ -16,16 +16,7 @@ def write_reports(
     metadata: EvaluationRunMetadata,
     output_dir: str | Path,
 ) -> dict[str, Path]:
-    """生成 JSON、CSV 和 Markdown 报告。
-
-    Args:
-        reports: 每个版本的评估报告。
-        metadata: 运行元数据。
-        output_dir: 输出目录。
-
-    Returns:
-        {"summary": path, "cases": path, "report": path}
-    """
+    """生成 JSON、CSV 和 Markdown 报告。"""
     output = Path(output_dir)
     output.mkdir(parents=True, exist_ok=True)
 
@@ -34,6 +25,23 @@ def write_reports(
     report_path = output / "latest_report.md"
 
     # JSON summary
+    _write_json_summary(reports, metadata, summary_path)
+
+    # CSV cases
+    _write_cases_csv(reports, cases_path)
+
+    # Markdown report
+    report_md = _build_markdown_report(reports, metadata)
+    report_path.write_text(report_md, encoding="utf-8")
+
+    return {"summary": summary_path, "cases": cases_path, "report": report_path}
+
+
+def _write_json_summary(
+    reports: list[PromptVersionReport],
+    metadata: EvaluationRunMetadata,
+    path: Path,
+) -> None:
     summary_data = {
         "metadata": {
             "run_id": metadata.run_id,
@@ -45,7 +53,6 @@ def write_reports(
             "dataset_hash": metadata.dataset_hash,
             "repair_enabled": metadata.repair_enabled,
             "max_attempts": metadata.max_attempts,
-            "git_commit": metadata.git_commit,
             "is_mock": metadata.is_mock,
         },
         "reports": [],
@@ -65,27 +72,16 @@ def write_reports(
             "fabrication_rate": m.fabrication_rate,
             "repair_trigger_rate": m.repair_trigger_rate,
             "average_provider_calls": m.average_provider_calls,
+            "average_duration_seconds": m.average_duration_seconds,
+            "average_tokens_per_case": m.average_tokens_per_case,
+            "total_tokens_used": m.total_tokens_used,
             "end_to_end_success_rate": m.end_to_end_success_rate,
             "errors_by_type": m.errors_by_type,
         })
-    summary_path.write_text(json.dumps(summary_data, ensure_ascii=False, indent=2), encoding="utf-8")
-
-    # CSV cases
-    _write_cases_csv(reports, cases_path)
-
-    # Markdown report
-    report_md = _build_markdown_report(reports, metadata)
-    report_path.write_text(report_md, encoding="utf-8")
-
-    return {
-        "summary": summary_path,
-        "cases": cases_path,
-        "report": report_path,
-    }
+    path.write_text(json.dumps(summary_data, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 def _write_cases_csv(reports: list[PromptVersionReport], path: Path) -> None:
-    """将每个案例的评估结果写入 CSV。"""
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow([
@@ -111,86 +107,265 @@ def _build_markdown_report(
     reports: list[PromptVersionReport],
     metadata: EvaluationRunMetadata,
 ) -> str:
-    """生成 Markdown 格式的评估报告。"""
+    lines: list[str] = []
+    lines.extend(_section_experiment_overview(metadata))
+    lines.extend(_section_prompt_comparison(reports))
+    lines.extend(_section_failure_analysis(reports))
+    lines.extend(_section_prompt_difference_analysis(reports, metadata))
+    lines.extend(_section_limitations(metadata))
+    lines.extend(_section_recommendations(metadata))
+    return "\n".join(lines) + "\n"
+
+
+# ── Section 1: Experiment Overview ──
+
+def _section_experiment_overview(metadata: EvaluationRunMetadata) -> list[str]:
     lines = [
         "# 提示词评估报告",
         "",
-        "## 运行信息",
+        "## 1. Experiment Overview",
         "",
-        f"- **运行 ID**: {metadata.run_id}",
-        f"- **时间**: {metadata.timestamp}",
-        f"- **Provider**: {metadata.provider}",
-        f"- **模型**: {metadata.model}",
-        f"- **数据集**: {metadata.dataset_path}",
-        f"- **数据集哈希**: {metadata.dataset_hash}",
-        f"- **修复**: {'开启' if metadata.repair_enabled else '关闭'}",
-        f"- **Mock 模式**: {'是（结果不代表提示词真实质量）' if metadata.is_mock else '否'}",
+        "| Item | Value |",
+        "| --- | --- |",
+        f"| Dataset size | {len(metadata.prompt_versions)} versions |",
+        f"| Prompt versions | {', '.join(metadata.prompt_versions)} |",
+        f"| Provider | {metadata.provider} |",
+        f"| Model | {metadata.model} |",
+        f"| Evaluation time | {metadata.timestamp} |",
+        f"| Dataset hash | {metadata.dataset_hash} |",
+        f"| Repair enabled | {metadata.repair_enabled} |",
+        f"| Max attempts | {metadata.max_attempts} |",
+        f"| Run ID | {metadata.run_id} |",
+    ]
+    if metadata.is_mock:
+        lines.extend([
+            "",
+            "> ⚠️ **Mock Evaluation Results**",
+            "> ",
+            "> This evaluation used the Mock Provider. Results validate the evaluation",
+            "> pipeline but **do NOT represent real prompt quality**.",
+            "> ",
+            "> V1 and V2 produce identical results with Mock because the provider uses",
+            "> keyword matching, not prompt semantics.",
+            "> ",
+            "> Run with `--provider openai_compatible` to get real quality data.",
+        ])
+    return lines
+
+
+# ── Section 2: Prompt Comparison ──
+
+def _section_prompt_comparison(reports: list[PromptVersionReport]) -> list[str]:
+    lines = [
+        "",
+        "## 2. Prompt Comparison",
+        "",
+        "| Metric | V1 | V2 |",
+        "| --- | --- | --- |",
+    ]
+
+    v1 = _find_report(reports, "v1")
+    v2 = _find_report(reports, "v2")
+
+    rows = [
+        ("JSON Parse Rate", lambda m: f"{m.raw_parse_rate:.1%}"),
+        ("Structured Success Rate", lambda m: f"{m.structured_success_rate:.1%}"),
+        ("Category Accuracy", lambda m: f"{m.category_accuracy:.1%}" if m.category_accuracy is not None else "N/A"),
+        ("Priority Accuracy", lambda m: f"{m.priority_accuracy:.1%}" if m.priority_accuracy is not None else "N/A"),
+        ("Order ID Accuracy", lambda m: f"{m.order_id_accuracy:.1%}" if m.order_id_accuracy is not None else "N/A"),
+        ("Human Review Accuracy", lambda m: f"{m.human_review_accuracy:.1%}" if m.human_review_accuracy is not None else "N/A"),
+        ("Tag Recall", lambda m: f"{m.tag_recall:.1%}"),
+        ("Fabrication Rate", lambda m: f"{m.fabrication_rate:.1%}"),
+        ("Repair Trigger Rate", lambda m: f"{m.repair_trigger_rate:.1%}"),
+        ("Avg Provider Calls", lambda m: f"{m.average_provider_calls:.1f}"),
+        ("Avg Duration (s)", lambda m: f"{m.average_duration_seconds:.2f}"),
+        ("End-to-End Success Rate", lambda m: f"{m.end_to_end_success_rate:.1%}"),
+    ]
+
+    for name, fmt in rows:
+        v1_val = fmt(v1.metrics) if v1 else "N/A"
+        v2_val = fmt(v2.metrics) if v2 else "N/A"
+        lines.append(f"| {name} | {v1_val} | {v2_val} |")
+
+    return lines
+
+
+# ── Section 3: Failure Analysis ──
+
+def _section_failure_analysis(reports: list[PromptVersionReport]) -> list[str]:
+    lines = [
+        "",
+        "## 3. Failure Analysis",
+        "",
+    ]
+
+    for r in reports:
+        lines.append(f"### {r.prompt_version} Failures")
+        lines.append("")
+
+        # JSON parse failures
+        parse_fails = [cr for cr in r.case_results if not cr.raw_parse_ok]
+        if parse_fails:
+            lines.append(f"**JSON Parse Failures ({len(parse_fails)}):**")
+            for cr in parse_fails:
+                lines.append(f"- {cr.case_id}: {cr.error_detail or 'unknown'}")
+        else:
+            lines.append("**JSON Parse Failures:** None")
+
+        # Category errors
+        cat_errors = [cr for cr in r.case_results if cr.final_result and cr.category_match is False]
+        if cat_errors:
+            lines.append(f"\n**Category Errors ({len(cat_errors)}):**")
+            for cr in cat_errors:
+                expected = cr.final_result.get("category") if cr.final_result else "?"
+                lines.append(f"- {cr.case_id}: got `{expected}`")
+
+        # Missing fields
+        missing = [cr for cr in r.case_results if cr.final_result and cr.order_id_match is False]
+        if missing:
+            lines.append(f"\n**Order ID Errors ({len(missing)}):**")
+            for cr in missing:
+                lines.append(f"- {cr.case_id}")
+
+        # Fabrication
+        fabricated = [cr for cr in r.case_results if cr.fabricated]
+        if fabricated:
+            lines.append(f"\n**Fabrication Cases ({len(fabricated)}):**")
+            for cr in fabricated:
+                lines.append(f"- {cr.case_id}: fabricated fields {cr.fabricated_fields}")
+        else:
+            lines.append("\n**Fabrication Cases:** None")
+
+        # Repair still failed
+        repair_fails = [cr for cr in r.case_results if cr.repair_triggered and not cr.success]
+        if repair_fails:
+            lines.append(f"\n**Repair Still Failed ({len(repair_fails)}):**")
+            for cr in repair_fails:
+                lines.append(f"- {cr.case_id}")
+        else:
+            lines.append("\n**Repair Still Failed:** None")
+
+        # Error type summary
+        if r.metrics.errors_by_type:
+            lines.append(f"\n**Error Type Distribution:**")
+            for etype, count in sorted(r.metrics.errors_by_type.items()):
+                lines.append(f"- {etype}: {count}")
+
+        lines.append("")
+
+    return lines
+
+
+# ── Section 4: Prompt Difference Analysis ──
+
+def _section_prompt_difference_analysis(
+    reports: list[PromptVersionReport],
+    metadata: EvaluationRunMetadata,
+) -> list[str]:
+    lines = [
+        "## 4. Prompt Difference Analysis",
+        "",
+        "### V1: Instruction-driven generation (Zero-shot)",
+        "",
+        "V1 relies solely on system instructions describing the task, field definitions,",
+        "rules, and output format. The model must infer the expected behavior from the",
+        "instruction text alone, with no worked examples.",
+        "",
+        "### V2: Example-guided generation (Few-shot)",
+        "",
+        "V2 extends V1 with 3 curated examples covering:",
+        "- Clear classification with order ID present",
+        "- Missing order ID (uncertain_fields handling)",
+        "- Insufficient information (low confidence, human review required)",
+        "",
+        "### Observed Differences",
+        "",
     ]
 
     if metadata.is_mock:
         lines.extend([
+            "**Mock mode:** V1 and V2 produce identical results because the Mock Provider",
+            "uses keyword matching, which ignores the prompt version entirely.",
             "",
-            "> ⚠️ **Mock 评估结果**：本次评估使用 Mock Provider，结果仅用于验证评估管道本身，",
-            "> **不代表提示词的真实质量**。请使用 `--provider openai_compatible` 运行真实评估。",
+            "Run with `--provider openai_compatible` to observe real differences.",
         ])
+    else:
+        v1 = _find_report(reports, "v1")
+        v2 = _find_report(reports, "v2")
+        if v1 and v2:
+            # Compare key metrics
+            lines.append("| Area | V1 | V2 | Analysis |")
+            lines.append("| --- | --- | --- | --- |")
+            lines.append(_diff_row("Category Accuracy", v1.metrics.category_accuracy, v2.metrics.category_accuracy))
+            lines.append(_diff_row("JSON Parse Rate", v1.metrics.raw_parse_rate, v2.metrics.raw_parse_rate))
+            lines.append(_diff_row("Fabrication Rate", v1.metrics.fabrication_rate, v2.metrics.fabrication_rate))
+            lines.append("")
+            lines.extend([
+                "> **Note:** Analysis is based on observed data. Where sample size is small (20 cases),",
+                "> differences may not be statistically significant. Do not over-generalize.",
+            ])
 
-    lines.extend(["", "## 指标对比", ""])
-    lines.append("| 指标 | V1 | V2 | 差值 |")
-    lines.append("| --- | --- | --- | --- |")
+    return lines
 
-    v1_report = next((r for r in reports if r.prompt_version == "v1"), None)
-    v2_report = next((r for r in reports if r.prompt_version == "v2"), None)
 
-    metric_rows = [
-        ("案例总数", lambda m: str(m.total_cases), False),
-        ("JSON 首次解析率", lambda m: f"{m.raw_parse_rate:.1%}", True),
-        ("结构化成功率", lambda m: f"{m.structured_success_rate:.1%}", True),
-        ("分类准确率", lambda m: f"{m.category_accuracy:.1%}" if m.category_accuracy is not None else "N/A", True),
-        ("优先级准确率", lambda m: f"{m.priority_accuracy:.1%}" if m.priority_accuracy is not None else "N/A", True),
-        ("订单号准确率", lambda m: f"{m.order_id_accuracy:.1%}" if m.order_id_accuracy is not None else "N/A", True),
-        ("人工审核准确率", lambda m: f"{m.human_review_accuracy:.1%}" if m.human_review_accuracy is not None else "N/A", True),
-        ("标签召回率", lambda m: f"{m.tag_recall:.1%}", True),
-        ("编造率", lambda m: f"{m.fabrication_rate:.1%}", True),
-        ("修复触发率", lambda m: f"{m.repair_trigger_rate:.1%}", True),
-        ("平均调用次数", lambda m: f"{m.average_provider_calls:.1f}", True),
-        ("端到端成功率", lambda m: f"{m.end_to_end_success_rate:.1%}", True),
-    ]
-
-    for name, formatter, show_diff in metric_rows:
-        v1_str = formatter(v1_report.metrics) if v1_report else "N/A"
-        v2_str = formatter(v2_report.metrics) if v2_report else "N/A"
-        if show_diff and v1_report and v2_report:
-            diff = formatter(v2_report.metrics) + " vs " + formatter(v1_report.metrics)
+def _diff_row(name: str, v1_val: float | None, v2_val: float | None) -> str:
+    v1_s = f"{v1_val:.1%}" if v1_val is not None else "N/A"
+    v2_s = f"{v2_val:.1%}" if v2_val is not None else "N/A"
+    if v1_val is not None and v2_val is not None:
+        if v2_val > v1_val:
+            analysis = "V2 better"
+        elif v2_val < v1_val:
+            analysis = "V1 better"
         else:
-            diff = "-"
-        lines.append(f"| {name} | {v1_str} | {v2_str} | {diff} |")
+            analysis = "Equal"
+    else:
+        analysis = "N/A"
+    return f"| {name} | {v1_s} | {v2_s} | {analysis} |"
 
-    # 失败案例
-    lines.extend(["", "## 失败案例", ""])
-    for r in reports:
-        failed = [cr for cr in r.case_results if not cr.success]
-        if failed:
-            lines.append(f"### {r.prompt_version}")
-            for cr in failed:
-                lines.append(f"- **{cr.case_id}**: {cr.error_type} — {cr.error_detail or '无详情'}")
 
-    # 原因分析
-    lines.extend(["", "## 原因分析", ""])
-    lines.append("基于实际数据，分析两个版本效果差异的原因。")
+# ── Section 5: Limitations ──
+
+def _section_limitations(metadata: EvaluationRunMetadata) -> list[str]:
+    lines = [
+        "## 5. Limitations",
+        "",
+        "- 20 test cases provide limited coverage of real-world ticket diversity",
+        "- Tag recall uses simplified substring matching, may miss synonyms",
+        "- Category accuracy depends on subjective expected values",
+        "- Single run per case; results may vary between runs",
+    ]
     if metadata.is_mock:
-        lines.append("Mock 模式下不进行原因分析。")
+        lines.append("- Mock results do not represent real prompt quality")
+    return lines
 
-    # 局限
-    lines.extend(["", "## 测试局限", ""])
-    lines.append("- 20 条数据的覆盖面有限")
+
+# ── Section 6: Recommendations ──
+
+def _section_recommendations(metadata: EvaluationRunMetadata) -> list[str]:
+    lines = [
+        "## 6. Recommendations",
+        "",
+    ]
     if metadata.is_mock:
-        lines.append("- Mock 结果不代表真实模型表现")
-    lines.append("- tag 匹配使用简化规则，同义词可能不完全覆盖")
+        lines.extend([
+            "- Run with `--provider openai_compatible` to obtain real prompt quality data",
+            "- Compare results across multiple models if available",
+        ])
+    else:
+        lines.extend([
+            "- Consider running multiple repetitions to reduce sampling variance",
+            "- Add more boundary and edge cases to the test dataset",
+            "- If V2 shows better category accuracy, few-shot examples are likely helping disambiguation",
+            "- If V1 and V2 show similar performance, the instruction alone may be sufficient",
+        ])
+    lines.extend([
+        "- Expand test dataset to 50+ cases for statistical significance",
+        "- Add multi-label evaluation for cases with multiple valid categories",
+    ])
+    return lines
 
-    # 建议
-    lines.extend(["", "## 改进建议", ""])
-    lines.append("- 使用真实 Provider 运行评估以获得可信结论")
-    lines.append("- 增加更多边界案例")
-    lines.append("- 考虑多次重复运行以减少采样偏差")
 
-    return "\n".join(lines) + "\n"
+def _find_report(
+    reports: list[PromptVersionReport], version: str
+) -> PromptVersionReport | None:
+    return next((r for r in reports if r.prompt_version == version), None)

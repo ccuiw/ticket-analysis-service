@@ -1,52 +1,106 @@
 # 提示词评估报告
 
-## 运行信息
+## 1. Experiment Overview
 
-- **运行 ID**: 8d4adf4a479f
-- **时间**: 2026-07-31T09:02:35.065222+00:00
-- **Provider**: mock
-- **模型**: mock
-- **数据集**: C:\Users\ccuiw\Desktop\w4project\ticket-analysis-service\data\test_cases.jsonl
-- **数据集哈希**: 85eced461bc8b6eb
-- **修复**: 开启
-- **Mock 模式**: 是（结果不代表提示词真实质量）
+| Item | Value |
+| --- | --- |
+| Dataset size | 2 versions |
+| Prompt versions | v1, v2 |
+| Provider | openai_compatible |
+| Model | deepseek-v4-flash |
+| Evaluation time | 2026-08-03T08:41:44.315884+00:00 |
+| Dataset hash | 320fb0c6ab776a79 |
+| Repair enabled | True |
+| Max attempts | 2 |
+| Run ID | d1997bc52280 |
 
-> ⚠️ **Mock 评估结果**：本次评估使用 Mock Provider，结果仅用于验证评估管道本身，
-> **不代表提示词的真实质量**。请使用 `--provider openai_compatible` 运行真实评估。
+## 2. Prompt Comparison
 
-## 指标对比
+| Metric | V1 | V2 |
+| --- | --- | --- |
+| JSON Parse Rate | 100.0% | 100.0% |
+| Structured Success Rate | 100.0% | 100.0% |
+| Category Accuracy | 70.0% | 70.0% |
+| Priority Accuracy | 88.2% | 88.2% |
+| Order ID Accuracy | 100.0% | 100.0% |
+| Human Review Accuracy | 60.0% | 75.0% |
+| Tag Recall | 82.9% | 85.4% |
+| Fabrication Rate | 0.0% | 0.0% |
+| Repair Trigger Rate | 0.0% | 0.0% |
+| Avg Provider Calls | 1.0 | 1.0 |
+| Avg Duration (s) | 2.21 | 2.53 |
+| End-to-End Success Rate | 40.0% | 55.0% |
 
-| 指标 | V1 | V2 | 差值 |
+## 3. Failure Analysis
+
+### v1 Failures
+
+**JSON Parse Failures:** None
+
+**Category Errors (6):**
+- case_004: got `物流问题`
+- case_005: got `一般咨询`
+- case_008: got `物流问题`
+- case_013: got `换货问题`
+- case_018: got `一般咨询`
+- case_019: got `一般咨询`
+
+**Fabrication Cases:** None
+
+**Repair Still Failed:** None
+
+### v2 Failures
+
+**JSON Parse Failures:** None
+
+**Category Errors (6):**
+- case_004: got `物流问题`
+- case_005: got `一般咨询`
+- case_008: got `物流问题`
+- case_013: got `售后问题`
+- case_018: got `一般咨询`
+- case_019: got `一般咨询`
+
+**Fabrication Cases:** None
+
+**Repair Still Failed:** None
+
+## 4. Prompt Difference Analysis
+
+### V1: Instruction-driven generation (Zero-shot)
+
+V1 relies solely on system instructions describing the task, field definitions,
+rules, and output format. The model must infer the expected behavior from the
+instruction text alone, with no worked examples.
+
+### V2: Example-guided generation (Few-shot)
+
+V2 extends V1 with 3 curated examples covering:
+- Clear classification with order ID present
+- Missing order ID (uncertain_fields handling)
+- Insufficient information (low confidence, human review required)
+
+### Observed Differences
+
+| Area | V1 | V2 | Analysis |
 | --- | --- | --- | --- |
-| 案例总数 | 20 | 20 | - |
-| JSON 首次解析率 | 100.0% | 100.0% | 100.0% vs 100.0% |
-| 结构化成功率 | 100.0% | 100.0% | 100.0% vs 100.0% |
-| 分类准确率 | 45.0% | 45.0% | 45.0% vs 45.0% |
-| 优先级准确率 | 29.4% | 29.4% | 29.4% vs 29.4% |
-| 订单号准确率 | 76.5% | 76.5% | 76.5% vs 76.5% |
-| 人工审核准确率 | 65.0% | 65.0% | 65.0% vs 65.0% |
-| 标签召回率 | 29.3% | 29.3% | 29.3% vs 29.3% |
-| 编造率 | 0.0% | 0.0% | 0.0% vs 0.0% |
-| 修复触发率 | 0.0% | 0.0% | 0.0% vs 0.0% |
-| 平均调用次数 | 1.0 | 1.0 | 1.0 vs 1.0 |
-| 端到端成功率 | 15.0% | 15.0% | 15.0% vs 15.0% |
+| Category Accuracy | 70.0% | 70.0% | Equal |
+| JSON Parse Rate | 100.0% | 100.0% | Equal |
+| Fabrication Rate | 0.0% | 0.0% | Equal |
 
-## 失败案例
+> **Note:** Analysis is based on observed data. Where sample size is small (20 cases),
+> differences may not be statistically significant. Do not over-generalize.
+## 5. Limitations
 
+- 20 test cases provide limited coverage of real-world ticket diversity
+- Tag recall uses simplified substring matching, may miss synonyms
+- Category accuracy depends on subjective expected values
+- Single run per case; results may vary between runs
+## 6. Recommendations
 
-## 原因分析
-
-基于实际数据，分析两个版本效果差异的原因。
-Mock 模式下不进行原因分析。
-
-## 测试局限
-
-- 20 条数据的覆盖面有限
-- Mock 结果不代表真实模型表现
-- tag 匹配使用简化规则，同义词可能不完全覆盖
-
-## 改进建议
-
-- 使用真实 Provider 运行评估以获得可信结论
-- 增加更多边界案例
-- 考虑多次重复运行以减少采样偏差
+- Consider running multiple repetitions to reduce sampling variance
+- Add more boundary and edge cases to the test dataset
+- If V2 shows better category accuracy, few-shot examples are likely helping disambiguation
+- If V1 and V2 show similar performance, the instruction alone may be sufficient
+- Expand test dataset to 50+ cases for statistical significance
+- Add multi-label evaluation for cases with multiple valid categories

@@ -55,6 +55,8 @@ class EvaluationMetrics:
     cases_fabricated: int = 0
     cases_repair_triggered: int = 0
     total_provider_calls: int = 0
+    total_duration_seconds: float = 0.0
+    total_tokens_used: int = 0
     end_to_end_success: int = 0
     errors_by_type: dict = field(default_factory=dict)
 
@@ -123,6 +125,18 @@ class EvaluationMetrics:
         if self.total_cases == 0:
             return 0.0
         return self.end_to_end_success / self.total_cases
+
+    @property
+    def average_duration_seconds(self) -> float:
+        if self.total_cases == 0:
+            return 0.0
+        return self.total_duration_seconds / self.total_cases
+
+    @property
+    def average_tokens_per_case(self) -> float:
+        if self.total_cases == 0:
+            return 0.0
+        return self.total_tokens_used / self.total_cases
 
 
 @dataclass

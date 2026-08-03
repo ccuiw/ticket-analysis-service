@@ -77,6 +77,13 @@ def main(argv: list[str] | None = None) -> None:
                 repair_enabled=repair_enabled,
             )
             metrics = compute_metrics(case_results, cases)
+            # Aggregate duration and provider calls
+            metrics.total_duration_seconds = sum(
+                cr.duration_seconds for cr in case_results
+            )
+            metrics.total_provider_calls = sum(
+                cr.provider_calls for cr in case_results
+            )
             report = PromptVersionReport(
                 prompt_version=version,
                 metrics=metrics,
